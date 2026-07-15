@@ -5,3 +5,6 @@
 /.gitignore      export-ignore
 /.gitattributes  export-ignore
 *.skill          export-ignore
+# Keel: workflow files — never in the distributable (git archive)
+.claude/ export-ignore
+CLAUDE.md export-ignore
