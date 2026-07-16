@@ -12,7 +12,7 @@ description: >-
   breaks. Do NOT use it for brand-new projects from scratch (that is what the keel
   skill is for); this skill assumes there is already code to start from.
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   author: José Conti
   homepage: https://plugins.joseconti.com
 ---
@@ -25,13 +25,13 @@ The core idea: before changing anything, you must understand what the code does 
 
 ## Version
 
-This skill is **Refactor v1.0.0**. If the user asks which version of this skill they have or are running (for example "what version is this skill", "which Refactor version do I have", "qué versión tiene este skill"), state it plainly from the `version` field in the frontmatter: "You're using Refactor v1.0.0." The frontmatter `version` is the source of truth; keep it, this line, and `CHANGELOG.md` in sync. Only change the version number on the user's explicit instruction — never bump it on your own initiative.
+This skill is **Refactor v1.1.0**. If the user asks which version of this skill they have or are running (for example "what version is this skill", "which Refactor version do I have", "qué versión tiene este skill"), state it plainly from the `version` field in the frontmatter: "You're using Refactor v1.1.0." The frontmatter `version` is the source of truth; keep it, this line, and `CHANGELOG.md` in sync. Only change the version number on the user's explicit instruction — never bump it on your own initiative.
 
 ## Update check (do this first, only if you can)
 
 At the very start of a run, before Phase 1, check whether a newer version has been published — but only if you have web access. Just check and notify; do NOT try to update or install anything yourself. Repository: https://github.com/joseconti/skill-refactoring
 
-1. Fetch the published version and compare it with this skill's frontmatter version (1.0.0). Read the `version:` field from `https://raw.githubusercontent.com/joseconti/skill-refactoring/main/SKILL.md` (or the top entry of `https://raw.githubusercontent.com/joseconti/skill-refactoring/main/CHANGELOG.md`).
+1. Fetch the published version and compare it with this skill's frontmatter version (1.1.0). Read the `version:` field from `https://raw.githubusercontent.com/joseconti/skill-refactoring/main/SKILL.md` (or the top entry of `https://raw.githubusercontent.com/joseconti/skill-refactoring/main/CHANGELOG.md`).
 2. If the published version is newer, simply tell the user there is a new version available (name it), briefly note what changed, and point them to the repository to download/update it if they want. Do not download, replace or install anything — leave updating entirely in the user's hands.
 3. If you cannot access the web, or the fetch fails, skip this silently and continue with the refactor. Never block the work because the update check failed.
 4. Do this at most once per session; do not nag.
@@ -85,6 +85,8 @@ Artifact: `refactoring/docs/CODE-MAP.md`, inside a `refactoring/docs/` folder cr
 
 A key part of this phase: locate and document absolutely EVERYTHING the software creates or persists: all options, metadata (order, product, user, etc.), tables, columns, cache keys, transients and files. This data inventory is the raw material for the compatibility mode decided in Phase 2; if something is missing here, a later migration or deletion will be incomplete.
 
+Do not build these inventories by reading alone: extract them mechanically first. Run systematic searches (grep/ripgrep or an AST tool) over the whole tree for the platform's persistence and extension APIs, and treat that raw output as the completeness baseline the map must account for — the sweep guarantees nothing is missed; reading provides the semantics. Concrete sweep recipes per platform are in `references/code-map.md`. The same applies to the public-surface inventory (hooks, filters, endpoints, CLI). While reading, also record performance-relevant observations (queries inside loops, work repeated on every request that could be cached, N+1 patterns, heavy operations) as risk-zone entries: they feed the performance baseline and budget of Phase 6.
+
 If the software extends or integrates with other plugins, study those plugins too and document the real hooks and filters they use. This avoids breaking them or inventing hook names by accident when adding functionality, a frequent mistake. If you do not have that plugin's code yet, ask the user to place it in `refactoring/docs/plugins` (in the connected directory) before mapping those integration points — do not guess the hook names.
 
 Do not start designing or rewriting until this map exists and has been reviewed. It is the foundation for the compatibility decision (Phase 2) and the test safety net (Phase 6).
@@ -106,7 +108,7 @@ Objective: understand what the user wants from the refactor and, above all, expl
 First ask what they want to achieve with the refactor (modernize, decouple, clean debt, prepare an extension...). Then set the compatibility mode by choosing one of these three paths:
 
 - **A) Full backward compatibility.** Keep all names (options, metas, endpoints, tables) as they are. The change is transparent: nothing external notices it and all data keeps working. Only internal names of classes, files and functions change.
-- **B) Rename with migration.** Options/metas/tables/endpoints are renamed to something clean, but a migration is written that moves everything existing to the new names. Transparent to the end user, but with the cost and risk of the migration.
+- **B) Rename with migration.** Options/metas/tables/endpoints are renamed to something clean, but a migration is written that moves everything existing to the new names. Transparent to the end user, but with the cost and risk of the migration. On real installed bases the migration is an engineering piece in its own right — batched, resumable, with dry-run and rollback (specified in Phase 5) — so factor that cost into the decision.
 - **C) No backward compatibility.** All names are changed without migration. It must be made VERY clear to the user that this means losing all existing data (licenses, settings, metadata). Only valid if the user explicitly accepts it.
 
 Lean on the Phase 1 data inventory so the scope of the migration or deletion is complete. Then WRITE the frozen contract to files (do not leave it only in memory):
@@ -131,14 +133,16 @@ Objective: design the software's modern architecture, aligned with the Phase 2 c
 
 Steps:
 
-1. Design the new structure and abstractions, consistent with the Phase 2 compatibility mode.
-2. Decide the level of modernization (language version, autoload, dependencies, typing).
-3. Abstract variability behind interfaces (interchangeable providers/engines) so the core is not coupled to one implementation.
-4. Define the extension points (hooks, filters, events, API) with maximum extensibility: every relevant string filterable, a hook before/after every important decision, every query and response filterable.
-5. Collect platform requirements (in WooCommerce: HPOS, blocks, multisite).
+1. Decide the replacement strategy explicitly, with the user: **full rewrite** (the new code replaces the old in one release, protected by the safety net) or **incremental / strangler** (old and new coexist; modules are replaced one at a time and the refactor can ship in stages). Codebase size, installed base, risk tolerance and release cadence decide: the bigger the codebase and the more users in production, the stronger the case for incremental. Record the choice and its reasons in `ARCHITECTURE.md`; the development AI's plan must follow it.
+2. Design the new structure and abstractions, consistent with the Phase 2 compatibility mode.
+3. Decide the level of modernization (language version, autoload, dependencies, typing).
+4. Abstract variability behind interfaces (interchangeable providers/engines) so the core is not coupled to one implementation.
+5. Define the extension points (hooks, filters, events, API) with maximum extensibility: every relevant string filterable, a hook before/after every important decision, every query and response filterable — and note in `ARCHITECTURE.md` that this layer has a runtime cost, so it is designed within the Phase 6 performance budget, not against it.
+6. Collect platform requirements (in WooCommerce: HPOS, blocks, multisite).
 
 Questions for the user:
 
+- Full rewrite or incremental (strangler) replacement? Could/should the refactor ship in stages?
 - What level of modernization are you after?
 - Is there variability worth abstracting behind an interface?
 - Specific platform requirements (HPOS, blocks, multisite)?
@@ -171,9 +175,12 @@ Like Phase 4, this is written as a specification in the handoff documentation (e
 
 The installer must be idempotent over the existing database (it must not overwrite or duplicate data). By default, uninstalling deletes nothing. If the user wants full deletion, it is offered as an opt-in option, visually distinct ("Danger Zone"), with a clear warning of permanent and irreversible deletion and, ideally, an extra confirmation. The deletion routine is mapped against the Phase 2 inventory to leave no trace.
 
+In mode B, the data migration is a first-class deliverable of this spec, not a footnote of the installer. `LIFECYCLE.md` must require it to be: idempotent and resumable (it can be interrupted at any point and re-run without corrupting anything), batched (it never loads or rewrites an unbounded set of rows in one pass — metas on a large store run to millions), with a dry-run mode that reports what would change without changing anything, a progress record, and a defined abort/rollback path (what state an installation is in if the migration stops halfway, and how it gets back). On WordPress, offer a WP-CLI command besides the admin trigger, for big sites. Ask for expected data volumes so the development AI sizes the batches for the largest real installation, not for the dev sandbox.
+
 Questions for the user:
 
 - What should happen on install, update and deactivate? Is data kept by default?
+- In mode B: roughly how much data would the migration move on the largest real installation (rows of options/metas/tables)? Does it need WP-CLI support?
 - Do you want a full-deletion option on uninstall? If so, with extra confirmation?
 - What exactly should that cleanup delete?
 - Do we need to handle multisite, multiple environments or version-to-version migrations?
@@ -188,6 +195,8 @@ This is also a handoff spec: the planning assistant defines the test strategy in
 
 The most powerful approach for a refactor is the "golden master" strategy: capture the reference version's responses as versioned fixtures and compare them byte for byte against the new code, in blocking CI. That way, breaking a contract raises an alarm immediately. See `references/golden-tests.md`.
 
+Sequencing is part of the guarantee: the fixtures (and the performance baseline below) are captured from the REFERENCE version, running in the real test environment, before a single line of new code exists. The handoff imposes this as the development AI's sprint 0, with the fixtures' provenance recorded (reference version, date). Fixtures captured — or regenerated — after the rewrite compare the rewrite against itself and protect nothing.
+
 This applies to modes A and B, where there is a contract to preserve. In mode C (no backward compatibility) there is nothing old to keep, so the golden master of the old contract does NOT apply; the tests focus on the new behavior instead. Do not waste effort capturing fixtures of something that is being intentionally dropped.
 
 The full test stack the spec must require (platform-appropriate, all green in blocking CI):
@@ -196,6 +205,7 @@ The full test stack the spec must require (platform-appropriate, all green in bl
 - **Static analysis.** For PHP: PHPStan (or Psalm) at a defined level. For other languages, the equivalent type/lint analyzer.
 - **Coding standards.** For WordPress: PHPCS with the WordPress and WooCommerce sniffs (WPCS). For other platforms, that ecosystem's linter/formatter.
 - **Golden tests** for the locked public contracts (above).
+- **Performance baseline and budget.** Captured in the same sprint 0, from the reference version in the real environment (alongside the golden fixtures in modes A/B; in mode C the baseline still applies even though fixtures do not): the platform's key metrics — for WordPress/WooCommerce, database queries per key operation, peak memory, and the time of the critical flows. The spec sets the budget (by default: no worse than the baseline beyond an agreed tolerance) and every sprint close compares against it. This matters because modernization has a cost profile of its own — abstraction layers and maximum extensibility are not free — and a refactor that is cleaner but meaningfully slower is a failed refactor unless the user explicitly accepts the trade-off.
 
 Name the concrete tools per the project's platform, with their config files (e.g. `phpunit.xml.dist`, `phpstan.neon`, `phpcs.xml`) and a CI workflow that blocks merges if anything is red. State the minimum coverage or level expected.
 
@@ -205,6 +215,7 @@ Questions for the user:
 
 - What behavior can never change and must be captured as a reference? (In mode C, none — skip the golden master.)
 - Do we have a "golden" version to compare against (fixtures)?
+- Which performance metrics matter for this software, and what tolerance versus the baseline is acceptable?
 - What target levels/coverage do you want for the test stack (e.g. PHPStan level, minimum coverage)?
 - Does validation run in a real environment or a sandbox? This decides who runs the build.
 
@@ -216,11 +227,11 @@ Objective: close the planning assistant's part. Gather all the documentation in 
 
 IMPORTANT: the development AI only receives the documentation in `refactoring/docs/`, written exclusively as instructions for it. NEVER hand it this SKILL or these phases. The document catalog, the mandatory rules block and the prompt templates are in `references/dev-handoff.md`; read it when you enter this phase.
 
-Make the file split explicit to the development AI: which files you provide (the specs it must read but not rewrite: `CODE-MAP.md`, `DATA-MODEL.md`, `ARCHITECTURE.md`, `SECURITY.md`, `LIFECYCLE.md`, `TESTING.md`) and which files it must create and how to use each (`PLAN.md`/`PROGRESS.md` as living state, `HOOKS.md`/`CLASSES.md`/`USAGE.md` documented as it builds, `API.md`/`REST-API.md` completing the contract, a `CONTINUE-PHASE-N.md` per sprint). The full list with usage is in `references/dev-handoff.md`.
+Make the file split explicit to the development AI: which files you provide (the specs it must read but not rewrite: `CODE-MAP.md`, `DATA-MODEL.md`, `ARCHITECTURE.md`, `SECURITY.md`, `LIFECYCLE.md`, `TESTING.md`, plus the seeded `API.md`/`REST-API.md` contract — byte-for-byte in modes A/B) and which files it must create and how to use each (`PLAN.md`/`PROGRESS.md` as living state, `HOOKS.md`/`CLASSES.md`/`USAGE.md` documented as it builds, `API.md`/`REST-API.md` completing the contract, a `CONTINUE-PHASE-N.md` per sprint). The full list with usage is in `references/dev-handoff.md`.
 
 The handoff documentation must impose these mandatory rules on the development AI:
 
-1. Set up a test environment and verify every part in it. IF it is WordPress/WooCommerce, create a WordPress Playground; IF it is any other platform, use that platform's normal local test setup (Playground does not apply). Never stop because the Playground "cannot be created" — it is WP-specific. If unsure how to test, ask instead of blocking.
+1. Sprint 0, before any new code: set up the test environment with the REFERENCE (old) version and capture from it the golden fixtures and the performance baseline that `TESTING.md` defines (fixtures only in modes A/B — in mode C there are none; the performance baseline always), recording their provenance. Only then start building, verifying every part in that environment. IF it is WordPress/WooCommerce, create a WordPress Playground; IF it is any other platform, use that platform's normal local test setup (Playground does not apply). Never stop because the Playground "cannot be created" — it is WP-specific. If unsure how to test, ask instead of blocking.
 2. If it needs a premium plugin, ask the person to place it in `refactoring/docs/plugins`; if it extends it, study it and document its real hooks, without inventing names.
 3. Study everything first, create a PLAN and follow it, split into short phases/sprints. At the close of each sprint, generate a `CONTINUE-PHASE-N.md` to resume in a fresh chat without dragging old context.
 4. Document everything it creates, so that in the end, just with those documents, the developer documentation page can be generated.
@@ -228,9 +239,9 @@ The handoff documentation must impose these mandatory rules on the development A
 6. NEVER invent: if something is unknown, ALWAYS ask before implementing.
 7. Propose improvements, don't silently deviate. The specs are a starting point, not dogma (except the sacred contracts: data/public interfaces per the compatibility mode, and security, which are non-negotiable). If you, as the implementation specialist, see a better way, tell the user, explain how and why, and ask if they want to discuss it with the planning assistant. If they say yes, generate a prompt the user will paste to the planning assistant describing what you saw, how you'd improve it and why, so it can evaluate too. Do not implement the change until it is agreed.
 8. Maximum extensibility: expose hooks (actions and filters) at every reasonable point and document them.
-9. Keep the automated test stack green (PHPUnit/equivalent, PHPStan/Psalm, PHPCS, golden tests) in blocking CI; never close a sprint with a check red.
+9. Keep the automated test stack green (PHPUnit/equivalent, PHPStan/Psalm, PHPCS, golden tests, performance versus the sprint-0 baseline) in blocking CI; never close a sprint with a check red, and never report a check as green without its raw output — sprint closes include the actual command/CI output, not a summary.
 10. ALWAYS create hygiene files: `.gitignore` and `.gitattributes` (with `export-ignore` for dev-only files), so nothing unwanted reaches the repo or the package; if the user's host/packaging uses a different mechanism (`.distignore`, `.npmignore`, etc.), create that instead — ask if unclear. Always create and maintain `changelog.txt`.
-11. When done, declare it and generate a return prompt for the planning assistant with the index of all the documentation and the final state, for the review (Phase 8).
+11. When done, declare it and generate a return prompt for the planning assistant with the index of all the documentation, the final state, and the evidence package for the review (Phase 8): raw outputs of every check, the contract-coverage table, and the golden fixtures' provenance.
 
 Handoff and continuity:
 
@@ -243,7 +254,7 @@ Handoff and continuity:
 
 ## What the development AI does (outside this skill)
 
-These are not phases of this skill, but it helps to know them for the later review: with the documentation in `refactoring/docs/`, the development AI builds in layers (scaffolding and tests first, then data, replicated contracts, domain, integrations, admin and front), implements security/lifecycle/tests per the specs, and documents each public surface as it creates it. It sets up the hygiene files early, but the final release (changelog, packaging, version bump) is closed in Phase 10, after the review approves — never bumping the version without an explicit order. It works with its own sprint plan and, at the end of each one, leaves a `CONTINUE-PHASE-N.md`.
+These are not phases of this skill, but it helps to know them for the later review: with the documentation in `refactoring/docs/`, the development AI first runs sprint 0 (the test environment with the reference version; the performance baseline — and, in modes A/B, the golden fixtures — captured from it, provenance recorded), then builds in layers (scaffolding and tests first, then data, replicated contracts, domain, integrations, admin and front), following the replacement strategy recorded in `ARCHITECTURE.md`, implements security/lifecycle/tests per the specs, and documents each public surface as it creates it. It sets up the hygiene files early, but the final release (changelog, packaging, version bump) is closed in Phase 10, after the review approves — never bumping the version without an explicit order. It works with its own sprint plan and, at the end of each one, leaves a `CONTINUE-PHASE-N.md`.
 
 ---
 
@@ -254,7 +265,7 @@ Objective: review the delivery and resolve, in a loop with the development AI, w
 On resuming:
 
 1. First read the prompt/response the person pastes from Code/Codex and DECIDE: if the context still fits, continue in this same chat; if it is already too long and there is a risk of losing something, generate a fresh self-contained prompt so the person opens a new chat. This decision is the first thing on resuming.
-2. Full review: read all the documentation in `refactoring/docs/`, check that the sacred rules were respected (data/contracts per the compatibility mode, security, that nothing was invented and no hooks were broken). You do not run the tests yourself (you are a chat assistant): confirm from the development AI's report and the CI status that the golden tests and quality tools ended up green; if that evidence is missing, ask for it before approving.
+2. Full review: read all the documentation in `refactoring/docs/`, check that the sacred rules were respected (data/contracts per the compatibility mode, security, that nothing was invented and no hooks were broken). You do not run the tests yourself (you are a chat assistant), so the standard of proof is raw evidence, never assurances. Require, and read, the evidence package: the actual outputs (CI run or command output) of the golden tests, the quality tools and the performance comparison against the sprint-0 baseline; the contract-coverage table (every `DATA-MODEL.md` and `API.md`/`REST-API.md` item mapped to where the new code handles it and which test covers it); and the fixtures' provenance (captured from the reference version in sprint 0). "All green" without the outputs is a claim, not evidence — ask for the missing piece before approving. And since whoever builds should not be the only one who verifies: if your environment supports subagents, delegate this review to a dedicated reviewer subagent by default; if it does not, tell the user this pass is worth running with fresh eyes.
 
 Depending on the review outcome, one of two branches:
 
@@ -268,8 +279,8 @@ When everything is resolved (review OK and tests with no errors), proceed to Pha
 
 Questions for the user:
 
-- Has the development AI already declared completion and delivered the review prompt?
-- Do you want a dedicated subagent to do the review for more rigor?
+- Has the development AI already declared completion and delivered the review prompt with the evidence package (raw outputs, contract-coverage table, fixtures' provenance)?
+- Is there anything specific you want the review to focus on?
 
 ---
 

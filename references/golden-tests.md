@@ -5,9 +5,13 @@ The "golden master" strategy is the most powerful safety net for a refactor: it 
 ## How to set them up
 
 1. Identify the contracts to lock from the Phase 2 inventory: endpoints/API, response formats, hooks with payloads, serialized outputs.
-2. Capture the reference version's responses (the one currently in production) for a representative set of inputs, including error cases. Store them as versioned fixtures in the repo.
+2. Capture the reference version's responses (the one currently in production) for a representative set of inputs, including error cases. Store them as versioned fixtures in the repo, recording their provenance (which reference version, when).
 3. Write tests that run the new code with the same inputs and compare the output byte for byte against the fixtures.
 4. Put these tests in CI as blocking: if one fails, it does not merge.
+
+## Sequencing — when the capture happens decides whether it protects anything
+
+The capture is the development AI's **sprint 0**: the old code runs in the real test environment and the fixtures are taken from it BEFORE a single line of new code exists. The same sprint captures the performance baseline defined in `TESTING.md`. Fixtures are NEVER generated — or regenerated — from the new code: a golden test whose fixture was captured after the rewrite compares the rewrite against itself and protects nothing. If a fixture ever needs to change, that is a contract change, not test maintenance: it requires the user's explicit approval and the corresponding update to `DATA-MODEL.md`/`API.md`, never a silent re-capture.
 
 ## Common traps that break contracts silently
 

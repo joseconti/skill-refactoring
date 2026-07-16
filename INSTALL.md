@@ -11,6 +11,7 @@ skill-refactoring/
 ├── SKILL.md              # The skill itself (read by Claude)
 ├── README.md             # What it is and who made it
 ├── INSTALL.md            # This file
+├── CHANGELOG.md          # Version history
 └── references/
     ├── code-map.md       # Structure of the code map (Phase 1)
     ├── golden-tests.md   # How to lock contracts with golden tests (Phase 6)
